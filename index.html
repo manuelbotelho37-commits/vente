@@ -451,7 +451,7 @@ function waitForClaudeBridge(timeoutMs){
 
 async function initStorage(){
   try{
-    const bridgeReady = await waitForClaudeBridge(10000);
+    const bridgeReady = /github\.io$/.test(location.hostname) ? false : await waitForClaudeBridge(10000);
     if(bridgeReady){
       const db = await window.claude.use("db");
       const user = await window.claude.use("user");
