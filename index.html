@@ -137,6 +137,12 @@
     <h1>Vente</h1>
   </header>
 
+  <div id="backupBanner" style="display:none; margin:12px 0 0; background:var(--surface); border:1px solid var(--brass-dim); border-radius:10px; padding:10px 12px; align-items:center; gap:10px;">
+    <span id="backupBannerText" style="flex:1; color:var(--dim); font-size:.78rem;"></span>
+    <button type="button" id="backupBannerBtn" class="btn-primary" style="flex:0 0 auto; padding:8px 14px; font-size:.82rem;"></button>
+    <button type="button" onclick="hideBackupBanner()" style="background:none; color:var(--dim); font-size:1rem; padding:4px 6px;">✕</button>
+  </div>
+
   <div class="dash">
     <div class="card"><div class="v" id="dashCours">0 €</div><div class="l">Commission en cours</div></div>
     <div class="card"><div class="v" id="dashTermine">0 €</div><div class="l">Commission déjà réglée</div></div>
@@ -412,6 +418,13 @@
 <div class="overlay" id="backupOverlay" onclick="if(event.target===this)closeBackup()">
   <div class="sheet">
     <h2>Sauvegarde &amp; transfert</h2>
+    <div style="display:flex; flex-direction:column; gap:8px; margin-bottom:6px;">
+      <button type="button" class="btn-primary" onclick="downloadFullBackup()">⬇ Sauvegarder sur le téléphone</button>
+      <button type="button" class="btn-secondary" id="btnShareBackup" onclick="shareFullBackup()">↗ Envoyer la sauvegarde (Drive, Gmail…)</button>
+      <button type="button" class="btn-secondary" onclick="document.getElementById('restoreFile').click()">⬆ Restaurer une sauvegarde</button>
+      <input type="file" id="restoreFile" accept=".json,application/json" style="display:none" onchange="onRestoreFile(event)">
+      <div id="lastBackupInfo" style="color:var(--dim); font-size:.75rem; text-align:center;"></div>
+    </div>
     <p style="color:var(--dim); font-size:.85rem; margin-top:0;">Pour déplacer tes clients vers un autre navigateur ou appareil : copie le code ci-dessous, ouvre l'app à l'autre endroit, colle-le dans "Importer" en bas, puis appuie sur Importer.</p>
     <label>Exporter mes données</label>
     <textarea id="exportBox" readonly style="width:100%; height:80px; padding:11px 13px; background:var(--surface2); border:1px solid var(--line); border-radius:9px; color:var(--text); font-size:.75rem; font-family:monospace;"></textarea>
@@ -423,6 +436,18 @@
     <div class="sheet-actions">
       <button class="btn-secondary" style="flex:1" onclick="closeBackup()">Fermer</button>
       <button class="btn-primary" style="flex:1" onclick="doImport()">Importer</button>
+    </div>
+  </div>
+</div>
+
+<div class="overlay" id="restoreOverlay" onclick="if(event.target===this)cancelRestore()">
+  <div class="sheet">
+    <h2>Restaurer cette sauvegarde ?</h2>
+    <p id="restoreInfo" style="color:var(--dim); font-size:.85rem; margin-top:0;"></p>
+    <p style="color:var(--red); font-size:.82rem;">Tout ce qui est actuellement dans l'appli sera remplacé.</p>
+    <div class="sheet-actions">
+      <button class="btn-secondary" style="flex:1" onclick="cancelRestore()">Annuler</button>
+      <button class="btn-primary" style="flex:1" onclick="confirmRestore()">Restaurer</button>
     </div>
   </div>
 </div>
@@ -1521,7 +1546,141 @@ if(localStorage.getItem('facture_global_notes_locked') === '1'){
   document.getElementById('btnLockNotes').style.background = 'var(--lock-on)';
 }
 
+/* ===== Sauvegarde complète sur le téléphone (clients, notes, documents, commissions) ===== */
+const BK_LAST='vente_last_backup', BK_DIRTY='vente_dirty_since';
+const __wasEmpty = (function(){ try{ const r=localStorage.getItem(KEY); return !r || r==='[]'; }catch(e){ return true; } })();
+let __bannerHidden = false, __pendingRestore = null, __bkReady = false;
+
+try{ if(navigator.storage && navigator.storage.persist) navigator.storage.persist(); }catch(e){}
+
+function markDirty(){
+  if(!__bkReady) return;
+  try{ if(!localStorage.getItem(BK_DIRTY)) localStorage.setItem(BK_DIRTY, String(Date.now())); }catch(e){}
+  updateBackupBanner();
+}
+const __origSave = save;
+save = function(){ __origSave(); markDirty(); };
+const __origSaveNotes = saveGlobalNotes;
+saveGlobalNotes = function(){ __origSaveNotes(); markDirty(); };
+const __origIdbSet = idbSetFacture;
+idbSetFacture = function(id, data){ return __origIdbSet(id, data).then(r=>{ markDirty(); return r; }); };
+const __origIdbDel = idbDeleteFacture;
+idbDeleteFacture = function(id){ return __origIdbDel(id).then(r=>{ markDirty(); return r; }); };
+
+function idbAllEntries(){
+  return openFactureDB().then(db=>new Promise((resolve,reject)=>{
+    const out = {};
+    const tx = db.transaction(FACT_STORE,'readonly');
+    const req = tx.objectStore(FACT_STORE).openCursor();
+    req.onsuccess = ()=>{ const c=req.result; if(c){ out[String(c.key)] = c.value; c.continue(); } else resolve(out); };
+    req.onerror = ()=>reject(req.error);
+  }));
+}
+async function buildBackupFile(){
+  let files = {};
+  try{ files = await idbAllEntries(); }catch(e){}
+  const data = {
+    app:'Vente', format:2, date:new Date().toISOString(),
+    clients: clients,
+    notes: localStorage.getItem('facture_global_notes_v1') || '',
+    notesLocked: localStorage.getItem('facture_global_notes_locked') || '0',
+    files: files
+  };
+  const d = new Date(), pad = n=>String(n).padStart(2,'0');
+  const name = `Vente-sauvegarde-${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}.json`;
+  return new File([JSON.stringify(data)], name, {type:'application/json'});
+}
+function backupDone(){
+  try{ localStorage.setItem(BK_LAST, String(Date.now())); localStorage.removeItem(BK_DIRTY); }catch(e){}
+  updateBackupBanner(); updateLastBackupInfo();
+}
+async function downloadFullBackup(){
+  const file = await buildBackupFile();
+  const url = URL.createObjectURL(file);
+  const a = document.createElement('a');
+  a.href = url; a.download = file.name;
+  document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(()=>URL.revokeObjectURL(url), 4000);
+  backupDone();
+}
+async function shareFullBackup(){
+  const file = await buildBackupFile();
+  if(navigator.canShare && navigator.canShare({files:[file]})){
+    try{ await navigator.share({files:[file], title:file.name}); backupDone(); }catch(e){}
+  } else {
+    downloadFullBackup();
+  }
+}
+function onRestoreFile(e){
+  const f = e.target.files && e.target.files[0];
+  e.target.value = '';
+  if(!f) return;
+  const r = new FileReader();
+  r.onload = ()=>{
+    try{
+      const data = JSON.parse(r.result);
+      const list = Array.isArray(data) ? data : data.clients;
+      if(!Array.isArray(list)) throw new Error();
+      __pendingRestore = Array.isArray(data) ? {clients:data} : data;
+      const nb = list.length;
+      const dt = data.date ? new Date(data.date).toLocaleDateString('fr-FR') : '';
+      document.getElementById('restoreInfo').textContent = nb + ' client' + (nb>1?'s':'') + (dt ? ' — sauvegarde du ' + dt : '');
+      document.getElementById('restoreOverlay').classList.add('open');
+    }catch(err){ alert('Ce fichier n\'est pas une sauvegarde Vente.'); }
+  };
+  r.readAsText(f);
+}
+function cancelRestore(){ __pendingRestore = null; document.getElementById('restoreOverlay').classList.remove('open'); }
+async function confirmRestore(){
+  const data = __pendingRestore; if(!data) return;
+  clients = data.clients;
+  if(typeof data.notes === 'string'){
+    localStorage.setItem('facture_global_notes_v1', data.notes);
+    document.getElementById('globalNotes').value = data.notes;
+  }
+  if(data.files && typeof data.files === 'object'){
+    for(const k of Object.keys(data.files)){ try{ await __origIdbSet(k, data.files[k]); }catch(e){} }
+  }
+  save();
+  document.getElementById('restoreOverlay').classList.remove('open');
+  closeBackup();
+  render();
+  try{ if(typeof renderCommissions==='function') renderCommissions(); }catch(e){}
+  backupDone();
+}
+function hideBackupBanner(){ __bannerHidden = true; document.getElementById('backupBanner').style.display='none'; }
+function lastBackupText(){
+  const t = parseInt(localStorage.getItem(BK_LAST)||'0',10);
+  if(!t) return 'Aucune sauvegarde sur le téléphone';
+  return 'Dernière sauvegarde : ' + new Date(t).toLocaleDateString('fr-FR');
+}
+function updateLastBackupInfo(){ const el=document.getElementById('lastBackupInfo'); if(el) el.textContent = lastBackupText(); }
+function updateBackupBanner(){
+  const b = document.getElementById('backupBanner'), t = document.getElementById('backupBannerText'), btn = document.getElementById('backupBannerBtn');
+  if(!b || __bannerHidden) return;
+  if(__wasEmpty && !localStorage.getItem(BK_LAST) && clients.length<=2){
+    t.textContent = 'Appli vide ? Remets tes fiches depuis ta sauvegarde.';
+    btn.textContent = '⬆ Restaurer';
+    btn.onclick = ()=>document.getElementById('restoreFile').click();
+    b.style.display = 'flex'; return;
+  }
+  const last = parseInt(localStorage.getItem(BK_LAST)||'0',10);
+  const dirty = !!localStorage.getItem(BK_DIRTY);
+  const old = !last || (Date.now()-last) > 24*3600*1000;
+  if(!last || (dirty && old)){
+    t.textContent = lastBackupText();
+    btn.textContent = '⬇ Sauvegarder';
+    btn.onclick = downloadFullBackup;
+    b.style.display = 'flex';
+  } else {
+    b.style.display = 'none';
+  }
+}
+const __origOpenBackup = openBackup;
+openBackup = function(){ __origOpenBackup(); updateLastBackupInfo(); };
+
 initStorage();
+setTimeout(()=>{ __bkReady = true; updateBackupBanner(); }, 1500);
 
 // Fait remonter le champ actif au-dessus du clavier virtuel
 document.querySelectorAll('.sheet input, .sheet select').forEach(el=>{

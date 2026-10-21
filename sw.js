@@ -1,4 +1,4 @@
-const CACHE='vente-v1';
+const CACHE='vente-v2';
 const CORE=['./','index.html','manifest.webmanifest','icon-192.png','icon-512.png',
  'https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js'];
 self.addEventListener('install',e=>{
