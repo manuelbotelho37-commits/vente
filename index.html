@@ -425,6 +425,12 @@
       <input type="file" id="restoreFile" accept=".json,application/json" style="display:none" onchange="onRestoreFile(event)">
       <div id="lastBackupInfo" style="color:var(--dim); font-size:.75rem; text-align:center;"></div>
     </div>
+    <label style="margin-top:18px;">Sauvegarde automatique sur Google Drive</label>
+    <div style="display:flex; gap:8px;">
+      <input id="driveUrl" placeholder="Colle ici le lien du script Google" style="flex:1; font-size:.8rem;" onchange="saveDriveUrl()">
+      <button type="button" class="btn-secondary" style="flex:0 0 auto; padding:10px 12px; font-size:.82rem;" onclick="saveDriveUrl(); uploadToDrive(true)">Tester</button>
+    </div>
+    <div id="driveInfo" style="color:var(--dim); font-size:.75rem; margin-top:6px;"></div>
     <p style="color:var(--dim); font-size:.85rem; margin-top:0;">Pour déplacer tes clients vers un autre navigateur ou appareil : copie le code ci-dessous, ouvre l'app à l'autre endroit, colle-le dans "Importer" en bas, puis appuie sur Importer.</p>
     <label>Exporter mes données</label>
     <textarea id="exportBox" readonly style="width:100%; height:80px; padding:11px 13px; background:var(--surface2); border:1px solid var(--line); border-radius:9px; color:var(--text); font-size:.75rem; font-family:monospace;"></textarea>
@@ -1584,6 +1590,7 @@ async function buildBackupFile(){
     clients: clients,
     notes: localStorage.getItem('facture_global_notes_v1') || '',
     notesLocked: localStorage.getItem('facture_global_notes_locked') || '0',
+    driveUrl: localStorage.getItem('vente_drive_url') || '',
     files: files
   };
   const d = new Date(), pad = n=>String(n).padStart(2,'0');
@@ -1638,6 +1645,7 @@ async function confirmRestore(){
     localStorage.setItem('facture_global_notes_v1', data.notes);
     document.getElementById('globalNotes').value = data.notes;
   }
+  if(data.driveUrl && !localStorage.getItem('vente_drive_url')){ localStorage.setItem('vente_drive_url', data.driveUrl); }
   if(data.files && typeof data.files === 'object'){
     for(const k of Object.keys(data.files)){ try{ await __origIdbSet(k, data.files[k]); }catch(e){} }
   }
@@ -1703,6 +1711,59 @@ function maybeAutoBackup(){
 }
 document.addEventListener('pointerup', maybeAutoBackup, true);
 document.addEventListener('visibilitychange', ()=>{ if(document.visibilityState==='visible') setTimeout(updateBackupBanner, 300); });
+
+/* ===== Sauvegarde automatique sur Google Drive (via le script Google de Manu) ===== */
+const DRV_URL='vente_drive_url', DRV_PENDING='vente_drive_pending', DRV_LAST='vente_drive_last';
+let __drvTimer = null, __drvBusy = false;
+function getDriveUrl(){ try{ return (localStorage.getItem(DRV_URL)||'').trim(); }catch(e){ return ''; } }
+function saveDriveUrl(){
+  const v = (document.getElementById('driveUrl').value||'').trim();
+  if(v) localStorage.setItem(DRV_URL, v); else localStorage.removeItem(DRV_URL);
+  updateDriveInfo();
+}
+function updateDriveInfo(msg, ok){
+  const el = document.getElementById('driveInfo'); if(!el) return;
+  if(msg){ el.textContent = msg; el.style.color = ok ? 'var(--green)' : 'var(--red)'; return; }
+  el.style.color = 'var(--dim)';
+  if(!getDriveUrl()){ el.textContent = 'Pas encore activée'; return; }
+  const t = parseInt(localStorage.getItem(DRV_LAST)||'0',10);
+  el.textContent = t ? ('✓ Dernier envoi sur Drive : ' + new Date(t).toLocaleDateString('fr-FR') + ' à ' + new Date(t).toLocaleTimeString('fr-FR',{hour:'2-digit',minute:'2-digit'})) : 'Activée — en attente du premier envoi';
+  if(localStorage.getItem(DRV_PENDING)) el.textContent += ' (modifications en attente d\'envoi)';
+}
+async function uploadToDrive(manual){
+  const url = getDriveUrl();
+  if(!url){ if(manual) updateDriveInfo('Colle d\'abord le lien du script Google.', false); return; }
+  if(__drvBusy) return;
+  __drvBusy = true;
+  if(manual) updateDriveInfo('Envoi en cours…', true);
+  try{
+    const file = await buildBackupFile();
+    const contenu = await file.text();
+    const res = await fetch(url, {method:'POST', headers:{'Content-Type':'text/plain;charset=utf-8'}, body: JSON.stringify({nom:file.name, contenu:contenu})});
+    const txt = (await res.text()).trim();
+    if(txt !== 'ok') throw new Error(txt);
+    localStorage.setItem(DRV_LAST, String(Date.now()));
+    localStorage.removeItem(DRV_PENDING);
+    updateDriveInfo();
+    if(manual) updateDriveInfo('✓ Sauvegarde envoyée sur ton Google Drive', true);
+  }catch(e){
+    if(manual) updateDriveInfo(navigator.onLine ? 'Échec de l\'envoi : vérifie le lien du script.' : 'Pas de connexion : l\'envoi se fera dès que tu auras internet.', false);
+  }finally{ __drvBusy = false; }
+}
+function scheduleDriveUpload(){
+  if(!getDriveUrl()) return;
+  try{ localStorage.setItem(DRV_PENDING,'1'); }catch(e){}
+  clearTimeout(__drvTimer);
+  __drvTimer = setTimeout(()=>uploadToDrive(false), 20000);
+}
+const __origMarkDirty = markDirty;
+markDirty = function(){ __origMarkDirty(); if(__bkReady) scheduleDriveUpload(); };
+function flushDriveIfPending(){ if(getDriveUrl() && localStorage.getItem(DRV_PENDING) && navigator.onLine) uploadToDrive(false); }
+window.addEventListener('online', flushDriveIfPending);
+document.addEventListener('visibilitychange', ()=>{ if(document.visibilityState==='hidden' && localStorage.getItem(DRV_PENDING)){ clearTimeout(__drvTimer); uploadToDrive(false); } else if(document.visibilityState==='visible'){ flushDriveIfPending(); } });
+const __origOpenBackup2 = openBackup;
+openBackup = function(){ __origOpenBackup2(); document.getElementById('driveUrl').value = getDriveUrl(); updateDriveInfo(); };
+setTimeout(flushDriveIfPending, 4000);
 
 Promise.resolve(initStorage()).catch(()=>{}).then(()=>setTimeout(()=>{ __bkReady = true; updateBackupBanner(); }, 300));
 
