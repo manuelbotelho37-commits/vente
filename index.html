@@ -1587,7 +1587,7 @@ async function buildBackupFile(){
     files: files
   };
   const d = new Date(), pad = n=>String(n).padStart(2,'0');
-  const name = `Vente-sauvegarde-${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}.json`;
+  const name = `Vente-sauvegarde-${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}-${pad(d.getHours())}h${pad(d.getMinutes())}.json`;
   return new File([JSON.stringify(data)], name, {type:'application/json'});
 }
 function backupDone(){
@@ -1652,7 +1652,7 @@ function hideBackupBanner(){ __bannerHidden = true; document.getElementById('bac
 function lastBackupText(){
   const t = parseInt(localStorage.getItem(BK_LAST)||'0',10);
   if(!t) return 'Aucune sauvegarde sur le téléphone';
-  return 'Dernière sauvegarde : ' + new Date(t).toLocaleDateString('fr-FR');
+  return 'Dernière sauvegarde : ' + new Date(t).toLocaleDateString('fr-FR') + ' à ' + new Date(t).toLocaleTimeString('fr-FR',{hour:'2-digit',minute:'2-digit'});
 }
 function updateLastBackupInfo(){ const el=document.getElementById('lastBackupInfo'); if(el) el.textContent = lastBackupText(); }
 function updateBackupBanner(){
@@ -1679,8 +1679,32 @@ function updateBackupBanner(){
 const __origOpenBackup = openBackup;
 openBackup = function(){ __origOpenBackup(); updateLastBackupInfo(); };
 
-initStorage();
-setTimeout(()=>{ __bkReady = true; updateBackupBanner(); }, 1500);
+/* ===== Sauvegarde automatique : dès qu'il y a eu une modification, au toucher suivant (au plus toutes les 8 h) ===== */
+const AUTO_BK_GAP = 8*3600*1000;
+let __autoBkBusy = false;
+function showBkToast(txt){
+  let t = document.getElementById('bkToast');
+  if(!t){
+    t = document.createElement('div'); t.id='bkToast';
+    t.style.cssText='position:fixed; left:50%; bottom:calc(24px + env(safe-area-inset-bottom,0px)); transform:translateX(-50%); background:var(--surface2); color:var(--green); border:1px solid var(--line); border-radius:20px; padding:8px 16px; font-size:.8rem; z-index:400; box-shadow:0 6px 20px rgba(0,0,0,.4); display:none;';
+    document.body.appendChild(t);
+  }
+  t.textContent = txt; t.style.display='block';
+  clearTimeout(t._h); t._h = setTimeout(()=>{ t.style.display='none'; }, 2600);
+}
+function maybeAutoBackup(){
+  if(!__bkReady || __autoBkBusy) return;
+  if(document.getElementById('restoreOverlay').classList.contains('open')) return;
+  let dirty=false, last=0;
+  try{ dirty = !!localStorage.getItem(BK_DIRTY); last = parseInt(localStorage.getItem(BK_LAST)||'0',10); }catch(e){ return; }
+  if(!dirty || (Date.now()-last) < AUTO_BK_GAP) return;
+  __autoBkBusy = true;
+  downloadFullBackup().then(()=>showBkToast('✓ Sauvegarde automatique faite')).catch(()=>{}).finally(()=>{ __autoBkBusy=false; });
+}
+document.addEventListener('pointerup', maybeAutoBackup, true);
+document.addEventListener('visibilitychange', ()=>{ if(document.visibilityState==='visible') setTimeout(updateBackupBanner, 300); });
+
+Promise.resolve(initStorage()).catch(()=>{}).then(()=>setTimeout(()=>{ __bkReady = true; updateBackupBanner(); }, 300));
 
 // Fait remonter le champ actif au-dessus du clavier virtuel
 document.querySelectorAll('.sheet input, .sheet select').forEach(el=>{
