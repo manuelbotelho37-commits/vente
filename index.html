@@ -8,29 +8,27 @@
 <link rel="apple-touch-icon" href="icon-192.png">
 <link rel="manifest" href="manifest.webmanifest">
 
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="fonts/fonts.css">
 <style>
   :root{
-    --bg:#14181d; --surface:#1c222a; --surface2:#242b34; --line:#323a45;
-    --text:#e9e7e1; --dim:#8b94a1; --brass:#c89b3c; --brass-dim:#8f7331;
+    --bg:#0c0c0e; --surface:#17171a; --surface2:#1f1e1c; --line:#33302a;
+    --text:#f3ead6; --dim:#a69c86; --brass:#c89b3c; --brass-dim:#8f7331;
     --blue:#5b93b0; --green:#5f9e79; --red:#b4574f;
     --lock-on:#f5a524; --lock-off:#22e06b;
     box-sizing:border-box; padding-top:env(safe-area-inset-top,0px); padding-bottom:env(safe-area-inset-bottom,0px);
   }
   @media (prefers-color-scheme: light){
     :root:not([data-theme="dark"]){
-      --bg:#14181d; --surface:#1c222a; --surface2:#242b34; --line:#323a45; --text:#e9e7e1; --dim:#8b94a1;
+      --bg:#0c0c0e; --surface:#17171a; --surface2:#1f1e1c; --line:#33302a; --text:#f3ead6; --dim:#a69c86;
     }
   }
   *{box-sizing:border-box; -webkit-tap-highlight-color:transparent;}
   html{scroll-padding-top:env(safe-area-inset-top,0px); height:100%;}
   body{
     margin:0; min-height:100%; background:var(--bg); color:var(--text);
-    font-family:'Inter',system-ui,sans-serif; -webkit-font-smoothing:antialiased;
+    font-family:"Source Sans 3",system-ui,sans-serif; -webkit-font-smoothing:antialiased;
   }
-  h1,h2,.serif{font-family:'Fraunces',serif;}
+  h1,h2,.serif{font-family:"Cormorant Garamond",serif;}
   .wrap{max-width:640px; margin:0 auto; padding:0 18px 100px;}
   header{padding:22px 0 14px; position:sticky; top:env(safe-area-inset-top,0px); background:var(--bg); z-index:5; border-bottom:1px solid var(--line);}
   header h1{font-size:1.7rem; font-weight:600; margin:0; letter-spacing:-.01em;}
@@ -38,7 +36,7 @@
 
   .dash{display:grid; grid-template-columns:repeat(2,1fr); gap:8px; margin:16px 0;}
   .dash .card{background:var(--surface); border:1px solid var(--line); border-radius:10px; padding:12px 10px;}
-  .dash .card .v{font-family:'Fraunces',serif; font-size:1.15rem; font-weight:600; line-height:1.15;}
+  .dash .card .v{font-family:"Cormorant Garamond",serif; font-size:1.15rem; font-weight:600; line-height:1.15;}
   .dash .card .l{color:var(--dim); font-size:.68rem; margin-top:3px;}
   .dash > .card:last-child:nth-child(odd){grid-column:1 / -1;}
   .dash .dash-row .card{grid-column:auto; min-width:0;}
@@ -71,7 +69,7 @@
   .field-popover.open{display:flex;}
   .field-color-swatch{width:30px; height:30px; border-radius:50%; border:2px solid var(--line); cursor:pointer; -webkit-tap-highlight-color:transparent;}
   .client .top{display:flex; justify-content:space-between; align-items:flex-start; gap:10px;}
-  .client .name{font-family:'Fraunces',serif; font-weight:600; font-size:1.05rem;}
+  .client .name{font-family:"Cormorant Garamond",serif; font-weight:600; font-size:1.05rem;}
   .client .meta{color:var(--dim); font-size:.78rem; margin-top:5px;}
   .client .amount{font-weight:600; font-size:1rem; text-align:right; white-space:nowrap;}
   .badge{display:inline-block; font-size:.68rem; font-weight:600; padding:3px 9px; border-radius:20px; margin-top:8px;}
@@ -129,6 +127,19 @@
   .xl-tabs{display:flex; gap:6px; overflow-x:auto; margin:0 0 10px; padding-bottom:2px;}
   .xl-tabs button{white-space:nowrap; padding:6px 12px; border-radius:16px; border:1px solid var(--line); background:var(--surface); color:var(--dim); font-size:.78rem;}
   .xl-tabs button.on{background:var(--brass); color:#1a1508; border-color:var(--brass); font-weight:600;}
+
+/* Thème Métro Dodo : écriture dorée, or dégradé, noir chaud */
+:root{--bg:#0c0c0e;--surface:#17171a;--surface2:#1f1e1c;--line:#33302a;--text:#f3ead6;--dim:#a69c86;--brass:#d4a94e;--brass2:#e2c275;--brass-dim:#8f7331;
+--s:#17171a;--s2:#1f1e1c;--gold:#d4a94e;--gold2:#e2c275;--mdgold:linear-gradient(135deg,#f7e3a1 0%,#d4a94e 45%,#a87b2c 72%,#ecd08a 100%)}
+html,body{background:radial-gradient(120% 60% at 30% 0%,#26241f 0%,#0c0c0e 60%) fixed,#0c0c0e!important}
+html{font-size:106.25%}
+body{font-family:"Source Sans 3",system-ui,-apple-system,"Segoe UI",sans-serif}
+*{font-variant-numeric:lining-nums}
+h1,.titre-or{font-family:"Cormorant Garamond","DejaVu Serif",Georgia,serif!important;background:var(--mdgold);-webkit-background-clip:text;background-clip:text;color:transparent!important;font-weight:600!important;letter-spacing:.01em}
+h1 button,h1 span,h1 a{color:var(--text)}
+.btn-primary,.tab.active,.xl-tabs button.on{background:var(--mdgold)!important;color:#111113!important;border-color:transparent!important}
+.tab:not(.active),.xl-tabs button:not(.on){color:var(--brass2)}
+.dash .card .v{font-weight:700;font-size:1.3rem}.client .name{font-weight:700;font-size:1.15rem}
 </style>
 </head>
 <body>
@@ -1247,7 +1258,7 @@ async function renderCommissions(){
   const months = Object.keys(groups).sort().reverse();
   listEl.innerHTML = months.map(m => `
     <div style="margin-bottom:18px;">
-      <div style="font-family:'Fraunces',serif; font-size:1.05rem; color:var(--brass); margin:0 0 8px;">${escapeHtml(monthLabel(m))}</div>
+      <div style="font-family:"Cormorant Garamond",serif; font-size:1.05rem; color:var(--brass); margin:0 0 8px;">${escapeHtml(monthLabel(m))}</div>
       ${groups[m].map(it => `<div class="doc-item">
         <span class="doc-name" style="cursor:pointer; font-weight:500;" onclick="ouvrirOriginalCommission('${it.attId}')">📊 ${escapeHtml(it.name || 'Tableau de commission')}</span>
         <span class="doc-actions">

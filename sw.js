@@ -1,5 +1,5 @@
-const CACHE='vente-v4';
-const CORE=['./','index.html','manifest.webmanifest','icon-192.png','icon-512.png',
+const CACHE='vente-v5';
+const CORE=['./','index.html','manifest.webmanifest','icon-192.png','icon-512.png','fonts/fonts.css','fonts/CormorantGaramond-latin.woff2','fonts/SourceSans3-latin.woff2',
  'https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js'];
 self.addEventListener('install',e=>{
   e.waitUntil(caches.open(CACHE).then(c=>Promise.all(CORE.map(u=>c.add(u).catch(()=>{})))).then(()=>self.skipWaiting()));
